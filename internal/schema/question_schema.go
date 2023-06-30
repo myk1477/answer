@@ -8,9 +8,13 @@ import (
 )
 
 const (
-	SitemapMaxSize      = 50000
-	SitemapCachekey     = "answer@sitemap"
-	SitemapPageCachekey = "answer@sitemap@page%d"
+	SitemapMaxSize         = 50000
+	SitemapCachekey        = "answer@sitemap"
+	SitemapPageCachekey    = "answer@sitemap@page%d"
+	QuestionOperationPin   = "pin"
+	QuestionOperationUnPin = "unpin"
+	QuestionOperationHide  = "hide"
+	QuestionOperationShow  = "show"
 )
 
 // RemoveQuestionReq delete question request
@@ -26,6 +30,14 @@ type CloseQuestionReq struct {
 	CloseType int    `json:"close_type"` // close_type
 	CloseMsg  string `json:"close_msg"`  // close_type
 	UserID    string `json:"-"`          // user_id
+}
+
+type OperationQuestionReq struct {
+	ID        string `validate:"required" json:"id"`
+	Operation string `json:"operation"` // operation [pin unpin hide show]
+	UserID    string `json:"-"`         // user_id
+	CanPin    bool   `json:"-"`
+	CanList   bool   `json:"-"`
 }
 
 type CloseQuestionMeta struct {
@@ -63,6 +75,34 @@ func (req *QuestionAdd) Check() (errFields []*validator.FormErrorField, err erro
 	return nil, nil
 }
 
+type QuestionAddByAnswer struct {
+	// question title
+	Title string `validate:"required,notblank,gte=6,lte=150" json:"title"`
+	// content
+	Content string `validate:"required,notblank,gte=6,lte=65535" json:"content"`
+	// html
+	HTML          string `json:"-"`
+	AnswerContent string `validate:"required,notblank,gte=6,lte=65535" json:"answer_content"`
+	AnswerHTML    string `json:"-"`
+	// tags
+	Tags []*TagItem `validate:"required,dive" json:"tags"`
+	// user id
+	UserID              string   `json:"-"`
+	MentionUsernameList []string `validate:"omitempty" json:"mention_username_list"`
+	QuestionPermission
+}
+
+func (req *QuestionAddByAnswer) Check() (errFields []*validator.FormErrorField, err error) {
+	req.HTML = converter.Markdown2HTML(req.Content)
+	req.AnswerHTML = converter.Markdown2HTML(req.AnswerContent)
+	for _, tag := range req.Tags {
+		if len(tag.OriginalText) > 0 {
+			tag.ParsedText = converter.Markdown2HTML(tag.OriginalText)
+		}
+	}
+	return nil, nil
+}
+
 type QuestionPermission struct {
 	// whether user can add it
 	CanAdd bool `json:"-"`
@@ -74,8 +114,17 @@ type QuestionPermission struct {
 	CanClose bool `json:"-"`
 	// whether user can reopen it
 	CanReopen bool `json:"-"`
+	// whether user can pin it
+	CanPin   bool `json:"-"`
+	CanUnPin bool `json:"-"`
+	// whether user can hide it
+	CanHide bool `json:"-"`
+	CanShow bool `json:"-"`
 	// whether user can use reserved it
 	CanUseReservedTag bool `json:"-"`
+	// whether user can invite other user to answer this question
+	CanInviteOtherToAnswer bool `json:"-"`
+	CanAddTag              bool `json:"-"`
 }
 
 type CheckCanQuestionUpdate struct {
@@ -94,7 +143,8 @@ type QuestionUpdate struct {
 	// content
 	Content string `validate:"required,notblank,gte=6,lte=65535" json:"content"`
 	// html
-	HTML string `json:"-"`
+	HTML       string   `json:"-"`
+	InviteUser []string `validate:"omitempty"  json:"invite_user"`
 	// tags
 	Tags []*TagItem `validate:"required,dive" json:"tags"`
 	// edit summary
@@ -102,6 +152,13 @@ type QuestionUpdate struct {
 	// user id
 	UserID       string `json:"-"`
 	NoNeedReview bool   `json:"-"`
+	QuestionPermission
+}
+
+type QuestionUpdateInviteUser struct {
+	ID         string   `validate:"required" json:"id"`
+	InviteUser []string `validate:"omitempty"  json:"invite_user"`
+	UserID     string   `json:"-"`
 	QuestionPermission
 }
 
@@ -141,6 +198,8 @@ type QuestionInfo struct {
 	UpdateTime           int64          `json:"-"`                                          // update_time
 	PostUpdateTime       int64          `json:"update_time"`
 	QuestionUpdateTime   int64          `json:"edit_time"`
+	Pin                  int            `json:"pin"`  // 1: unpin, 2: pin
+	Show                 int            `json:"show"` // 0: show, 1: hide
 	Status               int            `json:"status"`
 	Operation            *Operation     `json:"operation,omitempty"`
 	UserID               string         `json:"-" `
@@ -155,7 +214,8 @@ type QuestionInfo struct {
 	IsFollowed           bool           `json:"is_followed"`
 
 	// MemberActions
-	MemberActions []*PermissionMemberAction `json:"member_actions"`
+	MemberActions  []*PermissionMemberAction `json:"member_actions"`
+	ExtendsActions []*PermissionMemberAction `json:"extends_actions"`
 }
 
 // UpdateQuestionResp update question resp
@@ -250,6 +310,7 @@ type QuestionPageReq struct {
 	OrderCond string `validate:"omitempty,oneof=newest active frequent score unanswered" form:"order"`
 	Tag       string `validate:"omitempty,gt=0,lte=100" form:"tag"`
 	Username  string `validate:"omitempty,gt=0,lte=100" form:"username"`
+	InDays    int    `validate:"omitempty,min=1" form:"in_days"`
 
 	LoginUserID      string `json:"-"`
 	UserIDBeSearched string `json:"-"`
@@ -268,6 +329,8 @@ type QuestionPageResp struct {
 	Title       string     `json:"title"`
 	UrlTitle    string     `json:"url_title"`
 	Description string     `json:"description"`
+	Pin         int        `json:"pin"`  // 1: unpin, 2: pin
+	Show        int        `json:"show"` // 0: show, 1: hide
 	Status      int        `json:"status"`
 	Tags        []*TagResp `json:"tags"`
 
@@ -324,4 +387,26 @@ type SiteMapQuestionInfo struct {
 	ID         string `json:"id"`
 	Title      string `json:"title"`
 	UpdateTime string `json:"time"`
+}
+
+type PersonalQuestionPageReq struct {
+	Page        int    `validate:"omitempty,min=1" form:"page"`
+	PageSize    int    `validate:"omitempty,min=1" form:"page_size"`
+	OrderCond   string `validate:"omitempty,oneof=newest active frequent score unanswered" form:"order"`
+	Username    string `validate:"omitempty,gt=0,lte=100" form:"username"`
+	LoginUserID string `json:"-"`
+}
+
+type PersonalAnswerPageReq struct {
+	Page        int    `validate:"omitempty,min=1" form:"page"`
+	PageSize    int    `validate:"omitempty,min=1" form:"page_size"`
+	OrderCond   string `validate:"omitempty,oneof=newest active frequent score unanswered" form:"order"`
+	Username    string `validate:"omitempty,gt=0,lte=100" form:"username"`
+	LoginUserID string `json:"-"`
+}
+
+type PersonalCollectionPageReq struct {
+	Page     int    `validate:"omitempty,min=1" form:"page"`
+	PageSize int    `validate:"omitempty,min=1" form:"page_size"`
+	UserID   string `json:"-"`
 }

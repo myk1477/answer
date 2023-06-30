@@ -8,6 +8,10 @@ const (
 	QuestionStatusAvailable = 1
 	QuestionStatusClosed    = 2
 	QuestionStatusDeleted   = 10
+	QuestionUnPin           = 1
+	QuestionPin             = 2
+	QuestionShow            = 1
+	QuestionHide            = 2
 )
 
 var AdminQuestionSearchStatus = map[string]int{
@@ -28,10 +32,13 @@ type Question struct {
 	CreatedAt        time.Time `xorm:"not null default CURRENT_TIMESTAMP TIMESTAMP created_at"`
 	UpdatedAt        time.Time `xorm:"updated_at TIMESTAMP"`
 	UserID           string    `xorm:"not null default 0 BIGINT(20) INDEX user_id"`
+	InviteUserID     string    `xorm:"TEXT invite_user_id"`
 	LastEditUserID   string    `xorm:"not null default 0 BIGINT(20) last_edit_user_id"`
 	Title            string    `xorm:"not null default '' VARCHAR(150) title"`
 	OriginalText     string    `xorm:"not null MEDIUMTEXT original_text"`
 	ParsedText       string    `xorm:"not null MEDIUMTEXT parsed_text"`
+	Pin              int       `xorm:"not null default 1 INT(11) pin"`
+	Show             int       `xorm:"not null default 1 INT(11) show"`
 	Status           int       `xorm:"not null default 1 INT(11) status"`
 	ViewCount        int       `xorm:"not null default 0 INT(11) view_count"`
 	UniqueViewCount  int       `xorm:"not null default 0 INT(11) unique_view_count"`

@@ -22,7 +22,7 @@ const ActionBar = ({
   const { t } = useTranslation('translation', { keyPrefix: 'comment' });
 
   return (
-    <div className="d-flex justify-content-between fs-14">
+    <div className="d-flex justify-content-between small">
       <div className="d-flex align-items-center link-secondary">
         {userStatus !== 'deleted' ? (
           <Link to={`/users/${username}`}>{nickName}</Link>
@@ -32,6 +32,7 @@ const ActionBar = ({
         <span className="mx-1">•</span>
         <FormatTime time={createdAt} className="me-3" />
         <Button
+          title={t('tip_vote')}
           variant="link"
           size="sm"
           className={`me-3 btn-no-border p-0 ${isVote ? '' : 'link-secondary'}`}

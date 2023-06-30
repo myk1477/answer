@@ -20,9 +20,9 @@ import (
 	"github.com/answerdev/answer/pkg/encryption"
 	"github.com/answerdev/answer/pkg/htmltext"
 	"github.com/answerdev/answer/pkg/uid"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/jinzhu/copier"
 	"github.com/segmentfault/pacman/errors"
+	"github.com/segmentfault/pacman/i18n"
 	"github.com/segmentfault/pacman/log"
 )
 
@@ -448,12 +448,14 @@ func (cs *CommentService) GetCommentPersonalWithPage(ctx context.Context, req *s
 			if err != nil {
 				log.Error(err)
 			} else {
-				spew.Dump("==", objInfo)
 				commentResp.ObjectType = objInfo.ObjectType
 				commentResp.Title = objInfo.Title
 				commentResp.UrlTitle = htmltext.UrlTitle(objInfo.Title)
 				commentResp.QuestionID = objInfo.QuestionID
 				commentResp.AnswerID = objInfo.AnswerID
+				if objInfo.QuestionStatus == entity.QuestionStatusDeleted {
+					commentResp.Title = "Deleted question"
+				}
 			}
 		}
 		resp = append(resp, commentResp)
@@ -473,7 +475,7 @@ func (cs *CommentService) notificationQuestionComment(ctx context.Context, quest
 		ObjectID:       commentID,
 	}
 	msg.ObjectType = constant.CommentObjectType
-	msg.NotificationAction = constant.CommentQuestion
+	msg.NotificationAction = constant.NotificationCommentQuestion
 	notice_queue.AddNotification(msg)
 
 	receiverUserInfo, exist, err := cs.userRepo.GetByUserID(ctx, questionUserID)
@@ -506,6 +508,10 @@ func (cs *CommentService) notificationQuestionComment(ctx context.Context, quest
 		UserID:     receiverUserInfo.ID,
 	}
 
+	// If receiver has set language, use it to send email.
+	if len(receiverUserInfo.Language) > 0 {
+		ctx = context.WithValue(ctx, constant.AcceptLanguageFlag, i18n.Language(receiverUserInfo.Language))
+	}
 	title, body, err := cs.emailService.NewCommentTemplate(ctx, rawData)
 	if err != nil {
 		log.Error(err)
@@ -528,7 +534,7 @@ func (cs *CommentService) notificationAnswerComment(ctx context.Context,
 		ObjectID:       commentID,
 	}
 	msg.ObjectType = constant.CommentObjectType
-	msg.NotificationAction = constant.CommentAnswer
+	msg.NotificationAction = constant.NotificationCommentAnswer
 	notice_queue.AddNotification(msg)
 
 	receiverUserInfo, exist, err := cs.userRepo.GetByUserID(ctx, answerUserID)
@@ -562,6 +568,10 @@ func (cs *CommentService) notificationAnswerComment(ctx context.Context,
 		UserID:     receiverUserInfo.ID,
 	}
 
+	// If receiver has set language, use it to send email.
+	if len(receiverUserInfo.Language) > 0 {
+		ctx = context.WithValue(ctx, constant.AcceptLanguageFlag, i18n.Language(receiverUserInfo.Language))
+	}
 	title, body, err := cs.emailService.NewCommentTemplate(ctx, rawData)
 	if err != nil {
 		log.Error(err)
@@ -580,7 +590,7 @@ func (cs *CommentService) notificationCommentReply(ctx context.Context, replyUse
 		ObjectID:       commentID,
 	}
 	msg.ObjectType = constant.CommentObjectType
-	msg.NotificationAction = constant.ReplyToYou
+	msg.NotificationAction = constant.NotificationReplyToYou
 	notice_queue.AddNotification(msg)
 }
 
@@ -601,7 +611,7 @@ func (cs *CommentService) notificationMention(
 				ObjectID:       commentID,
 			}
 			msg.ObjectType = constant.CommentObjectType
-			msg.NotificationAction = constant.MentionYou
+			msg.NotificationAction = constant.NotificationMentionYou
 			notice_queue.AddNotification(msg)
 			alreadyNotifiedUserIDs = append(alreadyNotifiedUserIDs, userInfo.ID)
 		}

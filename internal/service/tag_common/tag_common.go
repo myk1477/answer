@@ -44,6 +44,9 @@ type TagRepo interface {
 
 type TagRelRepo interface {
 	AddTagRelList(ctx context.Context, tagList []*entity.TagRel) (err error)
+	RemoveTagRelListByObjectID(ctx context.Context, objectID string) (err error)
+	ShowTagRelListByObjectID(ctx context.Context, objectID string) (err error)
+	HideTagRelListByObjectID(ctx context.Context, objectID string) (err error)
 	RemoveTagRelListByIDs(ctx context.Context, ids []int64) (err error)
 	EnableTagRelByIDs(ctx context.Context, ids []int64) (err error)
 	GetObjectTagRelWithoutStatus(ctx context.Context, objectId, tagID string) (tagRel *entity.TagRel, exist bool, err error)
@@ -85,13 +88,42 @@ func (ts *TagCommonService) SearchTagLike(ctx context.Context, req *schema.Searc
 		return
 	}
 	ts.TagsFormatRecommendAndReserved(ctx, tags)
+	mainTagId := make([]string, 0)
 	for _, tag := range tags {
-		item := schema.SearchTagLikeResp{}
-		item.SlugName = tag.SlugName
-		item.DisplayName = tag.DisplayName
-		item.Recommend = tag.Recommend
-		item.Reserved = tag.Reserved
-		resp = append(resp, item)
+		if tag.MainTagID != 0 {
+			mainTagId = append(mainTagId, converter.IntToString(tag.MainTagID))
+		}
+	}
+	mainTagList, err := ts.tagCommonRepo.GetTagListByIDs(ctx, mainTagId)
+	if err != nil {
+		return
+	}
+	mainTagMap := make(map[string]*entity.Tag)
+	for _, tag := range mainTagList {
+		mainTagMap[tag.ID] = tag
+	}
+	for _, tag := range tags {
+		if tag.MainTagID != 0 {
+			_, ok := mainTagMap[converter.IntToString(tag.MainTagID)]
+			if ok {
+				tag.SlugName = mainTagMap[converter.IntToString(tag.MainTagID)].SlugName
+				tag.DisplayName = mainTagMap[converter.IntToString(tag.MainTagID)].DisplayName
+				tag.Reserved = mainTagMap[converter.IntToString(tag.MainTagID)].Reserved
+				tag.Recommend = mainTagMap[converter.IntToString(tag.MainTagID)].Recommend
+			}
+		}
+	}
+	RepetitiveTag := make(map[string]bool)
+	for _, tag := range tags {
+		if _, ok := RepetitiveTag[tag.SlugName]; !ok {
+			item := schema.SearchTagLikeResp{}
+			item.SlugName = tag.SlugName
+			item.DisplayName = tag.DisplayName
+			item.Recommend = tag.Recommend
+			item.Reserved = tag.Reserved
+			resp = append(resp, item)
+			RepetitiveTag[tag.SlugName] = true
+		}
 	}
 	return resp, nil
 }
@@ -215,6 +247,32 @@ func (ts *TagCommonService) ExistRecommend(ctx context.Context, tags []*schema.T
 	return false, nil
 }
 
+func (ts *TagCommonService) HasNewTag(ctx context.Context, tags []*schema.TagItem) (bool, error) {
+	tagNames := make([]string, 0)
+	tagMap := make(map[string]bool)
+	for _, item := range tags {
+		item.SlugName = strings.ReplaceAll(item.SlugName, " ", "-")
+		tagNames = append(tagNames, item.SlugName)
+		tagMap[item.SlugName] = false
+	}
+	list, err := ts.GetTagListByNames(ctx, tagNames)
+	if err != nil {
+		return true, err
+	}
+	for _, item := range list {
+		_, ok := tagMap[item.SlugName]
+		if ok {
+			tagMap[item.SlugName] = true
+		}
+	}
+	for _, has := range tagMap {
+		if !has {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // GetObjectTag get object tag
 func (ts *TagCommonService) GetObjectTag(ctx context.Context, objectId string) (objTags []*schema.TagResp, err error) {
 	tagsInfoList, err := ts.GetObjectEntityTag(ctx, objectId)
@@ -233,8 +291,10 @@ func (ts *TagCommonService) AddTag(ctx context.Context, req *schema.AddTagReq) (
 	if exist {
 		return nil, errors.BadRequest(reason.TagAlreadyExist)
 	}
+	SlugName := strings.ReplaceAll(req.SlugName, " ", "-")
+	SlugName = strings.ToLower(SlugName)
 	tagInfo := &entity.Tag{
-		SlugName:     strings.ReplaceAll(req.SlugName, " ", "-"),
+		SlugName:     SlugName,
 		DisplayName:  req.DisplayName,
 		OriginalText: req.OriginalText,
 		ParsedText:   req.ParsedText,
@@ -535,7 +595,7 @@ func (ts *TagCommonService) ObjectChangeTag(ctx context.Context, objectTagData *
 	thisObjTagNameList := make([]string, 0)
 	thisObjTagIDList := make([]string, 0)
 	for _, t := range objectTagData.Tags {
-		// t.SlugName = strings.ToLower(t.SlugName)
+		t.SlugName = strings.ToLower(t.SlugName)
 		thisObjTagNameList = append(thisObjTagNameList, t.SlugName)
 	}
 
@@ -620,6 +680,35 @@ func (ts *TagCommonService) RefreshTagQuestionCount(ctx context.Context, tagIDs 
 		log.Debugf("tag count updated %s %d", tagID, count)
 	}
 	return nil
+}
+
+func (ts *TagCommonService) RefreshTagCountByQuestionID(ctx context.Context, questionID string) (err error) {
+	tagListList, err := ts.tagRelRepo.GetObjectTagRelList(ctx, questionID)
+	if err != nil {
+		return err
+	}
+	tagIDs := make([]string, 0)
+	for _, item := range tagListList {
+		tagIDs = append(tagIDs, item.TagID)
+	}
+	err = ts.RefreshTagQuestionCount(ctx, tagIDs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// RemoveTagRelListByObjectID remove tag relation by object id
+func (ts *TagCommonService) RemoveTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
+	return ts.tagRelRepo.RemoveTagRelListByObjectID(ctx, objectID)
+}
+
+func (ts *TagCommonService) HideTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
+	return ts.tagRelRepo.HideTagRelListByObjectID(ctx, objectID)
+}
+
+func (ts *TagCommonService) ShowTagRelListByObjectID(ctx context.Context, objectID string) (err error) {
+	return ts.tagRelRepo.ShowTagRelListByObjectID(ctx, objectID)
 }
 
 // CreateOrUpdateTagRelList if tag relation is exists update status, if not create it

@@ -33,11 +33,11 @@ const Index = ({ userName, onSendReply, onCancel, mode }) => {
 
   return (
     <div className="mb-2">
-      <div className="fs-14 mb-2">
+      <div className="small mb-2">
         {t('reply_to')} {userName}
       </div>
       <div className="d-flex mb-1 align-items-start flex-column flex-md-row">
-        <div>
+        <div className="w-100">
           <div
             className={classNames('custom-form-control', {
               'is-invalid': validationErrorMsg,

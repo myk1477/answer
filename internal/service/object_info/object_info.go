@@ -11,6 +11,7 @@ import (
 	questioncommon "github.com/answerdev/answer/internal/service/question_common"
 	tagcommon "github.com/answerdev/answer/internal/service/tag_common"
 	"github.com/answerdev/answer/pkg/obj"
+	"github.com/answerdev/answer/pkg/uid"
 	"github.com/segmentfault/pacman/errors"
 )
 
@@ -50,6 +51,7 @@ func (os *ObjService) GetUnreviewedRevisionInfo(ctx context.Context, objectID st
 		if err != nil {
 			return nil, err
 		}
+		questionInfo.ID = uid.EnShortID(questionInfo.ID)
 		if !exist {
 			break
 		}
@@ -85,6 +87,7 @@ func (os *ObjService) GetUnreviewedRevisionInfo(ctx context.Context, objectID st
 		if !exist {
 			break
 		}
+		questionInfo.ID = uid.EnShortID(questionInfo.ID)
 		objInfo = &schema.UnreviewedRevisionInfoInfo{
 			ObjectID: answerInfo.ID,
 			Title:    questionInfo.Title,
@@ -132,6 +135,7 @@ func (os *ObjService) GetInfo(ctx context.Context, objectID string) (objInfo *sc
 			ObjectID:            questionInfo.ID,
 			ObjectCreatorUserID: questionInfo.UserID,
 			QuestionID:          questionInfo.ID,
+			QuestionStatus:      questionInfo.Status,
 			ObjectType:          objectType,
 			Title:               questionInfo.Title,
 			Content:             questionInfo.ParsedText, // todo trim
@@ -155,6 +159,7 @@ func (os *ObjService) GetInfo(ctx context.Context, objectID string) (objInfo *sc
 			ObjectID:            answerInfo.ID,
 			ObjectCreatorUserID: answerInfo.UserID,
 			QuestionID:          answerInfo.QuestionID,
+			QuestionStatus:      questionInfo.Status,
 			AnswerID:            answerInfo.ID,
 			ObjectType:          objectType,
 			Title:               questionInfo.Title,    // this should be question title
@@ -182,6 +187,7 @@ func (os *ObjService) GetInfo(ctx context.Context, objectID string) (objInfo *sc
 			}
 			if exist {
 				objInfo.QuestionID = questionInfo.ID
+				objInfo.QuestionStatus = questionInfo.Status
 				objInfo.Title = questionInfo.Title
 			}
 			answerInfo, exist, err := os.answerRepo.GetAnswer(ctx, commentInfo.ObjectID)

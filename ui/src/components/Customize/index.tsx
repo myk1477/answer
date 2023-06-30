@@ -32,9 +32,11 @@ const ActivateScriptNodes = (el, part) => {
       scriptList.push(node);
     }
   }
-  scriptList.forEach((so) => {
+  scriptList?.forEach((so) => {
     const script = document.createElement('script');
-    script.text = so.text;
+    script.text = `(() => {
+      ${so.text}
+    })();`;
     for (let i = 0; i < so.attributes.length; i += 1) {
       const attr = so.attributes[i];
       script.setAttribute(attr.name, attr.value);

@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
 import classNames from 'classnames';
 
-import { useTagModal } from '@/hooks';
+import { useTagModal, useToast } from '@/hooks';
 import type * as Type from '@/common/interface';
-import { queryTags } from '@/services';
+import { queryTags, useUserPermission } from '@/services';
 
 import './index.scss';
 
@@ -38,11 +38,12 @@ const TagSelector: FC<IProps> = ({
   const [initialValue, setInitialValue] = useState<Type.Tag[]>([...value]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [repeatIndex, setRepeatIndex] = useState(-1);
-  const [tag, setTag] = useState<string>('');
+  const [searchValue, setSearchValue] = useState<string>('');
   const [tags, setTags] = useState<Type.Tag[] | null>(null);
   const { t } = useTranslation('translation', { keyPrefix: 'tag_selector' });
   const [visibleMenu, setVisibleMenu] = useState(false);
-
+  const { data: userPermission } = useUserPermission('tag.add');
+  const toast = useToast();
   const tagModal = useTagModal({
     onConfirm: (data) => {
       if (!(onChange instanceof Function)) {
@@ -101,14 +102,19 @@ const TagSelector: FC<IProps> = ({
   const fetchTags = (str) => {
     queryTags(str).then((res) => {
       const tagArray: Type.Tag[] = filterTags(res || []);
-      setTags(tagArray);
+      setTags(tagArray?.length > 5 ? tagArray.slice(0, 5) : tagArray);
     });
   };
 
   useEffect(() => {
-    fetchTags(tag);
+    fetchTags(searchValue);
   }, [visibleMenu]);
 
+  const resetSearch = () => {
+    setCurrentIndex(0);
+    setSearchValue('');
+    setTags([]);
+  };
   const handleClick = (val: Type.Tag) => {
     const findIndex = initialValue.findIndex(
       (item) => item.slug_name.toLowerCase() === val.slug_name.toLowerCase(),
@@ -129,6 +135,7 @@ const TagSelector: FC<IProps> = ({
         setRepeatIndex(-1);
       }, 2000);
     }
+    resetSearch();
   };
 
   const handleRemove = (val: Type.Tag) => {
@@ -146,7 +153,7 @@ const TagSelector: FC<IProps> = ({
 
   const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const searchStr = e.currentTarget.value.replace(';', '');
-    setTag(searchStr);
+    setSearchValue(searchStr);
     fetchTags(searchStr);
   };
 
@@ -172,17 +179,30 @@ const TagSelector: FC<IProps> = ({
       e.preventDefault();
 
       if (tags.length === 0) {
-        tagModal.onShow(tag);
+        tagModal.onShow(searchValue);
         return;
       }
       if (currentIndex <= tags.length - 1) {
         handleClick(tags[currentIndex]);
-        if (currentIndex === tags.length - 1 && currentIndex > 0) {
-          setCurrentIndex(currentIndex - 1);
-        }
+        // if (currentIndex === tags.length - 1 && currentIndex > 0) {
+        //   setCurrentIndex(currentIndex - 1);
+        // }
       }
     }
   };
+
+  const handleCreate = () => {
+    const tagAddPermission = userPermission?.['tag.add'];
+    if (!tagAddPermission || tagAddPermission?.has_permission) {
+      tagModal.onShow(searchValue);
+    } else if (tagAddPermission?.no_permission_tip) {
+      toast.onShow({
+        msg: tagAddPermission.no_permission_tip,
+        variant: 'danger',
+      });
+    }
+  };
+
   return (
     <div
       className="tag-selector-wrap"
@@ -228,13 +248,14 @@ const TagSelector: FC<IProps> = ({
                     <FormControl
                       placeholder={t('search_tag')}
                       autoFocus
-                      value={tag}
+                      value={searchValue}
                       onChange={handleSearch}
                     />
                   </Form>
                 </Dropdown.Header>
               )}
-              {showRequiredTagText &&
+              {!searchValue &&
+                showRequiredTagText &&
                 tags &&
                 tags.filter((v) => v.recommend)?.length > 0 && (
                   <h6 className="dropdown-header">{t('tag_required_text')}</h6>
@@ -251,18 +272,16 @@ const TagSelector: FC<IProps> = ({
                   </Dropdown.Item>
                 );
               })}
-              {tag && tags && tags.length === 0 && (
+              {searchValue && tags && tags.length === 0 && (
                 <Dropdown.Item disabled className="text-secondary">
                   {t('no_result')}
                 </Dropdown.Item>
               )}
-              {!hiddenCreateBtn && tag && (
+              {!hiddenCreateBtn && searchValue && (
                 <Button
                   variant="link"
                   className="px-3 btn-no-border w-100 text-start"
-                  onClick={() => {
-                    tagModal.onShow(tag);
-                  }}>
+                  onClick={handleCreate}>
                   + {t('create_btn')}
                 </Button>
               )}

@@ -58,7 +58,7 @@ const Answers: FC = () => {
         content:
           item.accepted === 2
             ? t('answer_accepted', { keyPrefix: 'delete' })
-            : `<p>${t('other', { keyPrefix: 'delete' })}</p>`,
+            : t('other', { keyPrefix: 'delete' }),
         cancelBtnVariant: 'link',
         confirmBtnVariant: 'danger',
         confirmText: t('delete', { keyPrefix: 'btns' }),
@@ -146,7 +146,7 @@ const Answers: FC = () => {
                       )}
                     </Stack>
                     <div
-                      className="text-truncate-2 fs-14"
+                      className="text-truncate-2 small"
                       style={{ maxWidth: '30rem' }}>
                       {escapeRemove(li.description)}
                     </div>
@@ -158,7 +158,7 @@ const Answers: FC = () => {
                     <BaseUserCard data={li.user_info} />
 
                     <FormatTime
-                      className="fs-14 text-secondary"
+                      className="small text-secondary"
                       time={li.create_time}
                     />
                   </Stack>

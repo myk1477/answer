@@ -50,6 +50,8 @@ var tables = []interface{}{
 	&entity.RolePowerRel{},
 	&entity.Power{},
 	&entity.UserRoleRel{},
+	&entity.PluginConfig{},
+	&entity.UserExternalLogin{},
 }
 
 // InitDB init db
@@ -112,9 +114,8 @@ func initAdminUser(engine *xorm.Engine) error {
 
 func initSiteInfo(engine *xorm.Engine, language, siteName, siteURL, contactEmail string) error {
 	interfaceData := map[string]string{
-		"logo":     "",
-		"theme":    "black",
-		"language": language,
+		"language":  language,
+		"time_zone": "UTC",
 	}
 	interfaceDataBytes, _ := json.Marshal(interfaceData)
 	_, err := engine.InsertOne(&entity.SiteInfo{
@@ -142,8 +143,9 @@ func initSiteInfo(engine *xorm.Engine, language, siteName, siteURL, contactEmail
 	}
 
 	loginConfig := map[string]bool{
-		"allow_new_registrations": true,
-		"login_required":          false,
+		"allow_new_registrations":   true,
+		"allow_email_registrations": true,
+		"login_required":            false,
 	}
 	loginConfigDataBytes, _ := json.Marshal(loginConfig)
 	_, err = engine.InsertOne(&entity.SiteInfo{
@@ -172,6 +174,26 @@ func initSiteInfo(engine *xorm.Engine, language, siteName, siteURL, contactEmail
 	_, err = engine.InsertOne(&entity.SiteInfo{
 		Type:    "seo",
 		Content: string(seoDataBytes),
+		Status:  1,
+	})
+	if err != nil {
+		return err
+	}
+
+	usersData := map[string]any{
+		"default_avatar":            "gravatar",
+		"default_gravatar_base_url": "https://www.gravatar.com/avatar/",
+		"allow_update_display_name": true,
+		"allow_update_username":     true,
+		"allow_update_avatar":       true,
+		"allow_update_bio":          true,
+		"allow_update_website":      true,
+		"allow_update_location":     true,
+	}
+	usersDataBytes, _ := json.Marshal(usersData)
+	_, err = engine.InsertOne(&entity.SiteInfo{
+		Type:    "users",
+		Content: string(usersDataBytes),
 		Status:  1,
 	})
 	if err != nil {
@@ -270,7 +292,7 @@ func initConfigTable(engine *xorm.Engine) error {
 		{ID: 41, Key: "rank.answer.add", Value: `1`},
 		{ID: 42, Key: "rank.answer.edit", Value: `200`},
 		{ID: 43, Key: "rank.answer.delete", Value: `-1`},
-		{ID: 44, Key: "rank.answer.accept", Value: `1`},
+		{ID: 44, Key: "rank.answer.accept", Value: `-1`},
 		{ID: 45, Key: "rank.answer.vote_up", Value: `15`},
 		{ID: 46, Key: "rank.answer.vote_down", Value: `125`},
 		{ID: 47, Key: "rank.comment.add", Value: `1`},
@@ -344,6 +366,16 @@ func initConfigTable(engine *xorm.Engine) error {
 		{ID: 115, Key: "rank.question.close", Value: `-1`},
 		{ID: 116, Key: "rank.question.reopen", Value: `-1`},
 		{ID: 117, Key: "rank.tag.use_reserved_tag", Value: `-1`},
+		{ID: 118, Key: "plugin.status", Value: `{}`},
+		{ID: 119, Key: "question.pin", Value: `0`},
+		{ID: 120, Key: "question.unpin", Value: `0`},
+		{ID: 121, Key: "question.show", Value: `0`},
+		{ID: 122, Key: "question.hide", Value: `0`},
+		{ID: 123, Key: "rank.question.pin", Value: `-1`},
+		{ID: 124, Key: "rank.question.unpin", Value: `-1`},
+		{ID: 125, Key: "rank.question.show", Value: `-1`},
+		{ID: 126, Key: "rank.question.hide", Value: `-1`},
+		{ID: 127, Key: "rank.answer.invite_someone_to_answer", Value: `1000`},
 	}
 	_, err := engine.Insert(defaultConfigTable)
 	return err
@@ -394,6 +426,11 @@ func initRolePower(engine *xorm.Engine) (err error) {
 		{ID: 31, Name: "answer audit", PowerType: permission.AnswerAudit, Description: "answer audit"},
 		{ID: 32, Name: "question audit", PowerType: permission.QuestionAudit, Description: "question audit"},
 		{ID: 33, Name: "tag audit", PowerType: permission.TagAudit, Description: "tag audit"},
+		{ID: 34, Name: "question pin", PowerType: permission.QuestionPin, Description: "top the question"},
+		{ID: 35, Name: "question hide", PowerType: permission.QuestionHide, Description: "hide  the question"},
+		{ID: 36, Name: "question unpin", PowerType: permission.QuestionUnPin, Description: "untop the question"},
+		{ID: 37, Name: "question show", PowerType: permission.QuestionShow, Description: "show the question"},
+		{ID: 38, Name: "invite someone to answer", PowerType: permission.AnswerInviteSomeoneToAnswer, Description: "invite someone to answer"},
 	}
 	_, err = engine.Insert(powers)
 	if err != nil {
@@ -435,6 +472,11 @@ func initRolePower(engine *xorm.Engine) (err error) {
 		{RoleID: 2, PowerType: permission.QuestionAudit},
 		{RoleID: 2, PowerType: permission.TagAudit},
 		{RoleID: 2, PowerType: permission.TagUseReservedTag},
+		{RoleID: 2, PowerType: permission.QuestionPin},
+		{RoleID: 2, PowerType: permission.QuestionHide},
+		{RoleID: 2, PowerType: permission.QuestionUnPin},
+		{RoleID: 2, PowerType: permission.QuestionShow},
+		{RoleID: 2, PowerType: permission.AnswerInviteSomeoneToAnswer},
 
 		{RoleID: 3, PowerType: permission.QuestionAdd},
 		{RoleID: 3, PowerType: permission.QuestionEdit},
@@ -469,6 +511,11 @@ func initRolePower(engine *xorm.Engine) (err error) {
 		{RoleID: 3, PowerType: permission.QuestionAudit},
 		{RoleID: 3, PowerType: permission.TagAudit},
 		{RoleID: 3, PowerType: permission.TagUseReservedTag},
+		{RoleID: 3, PowerType: permission.QuestionPin},
+		{RoleID: 3, PowerType: permission.QuestionHide},
+		{RoleID: 3, PowerType: permission.QuestionUnPin},
+		{RoleID: 3, PowerType: permission.QuestionShow},
+		{RoleID: 3, PowerType: permission.AnswerInviteSomeoneToAnswer},
 	}
 	_, err = engine.Insert(rolePowerRels)
 	if err != nil {

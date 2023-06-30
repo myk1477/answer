@@ -35,7 +35,7 @@ type DashboardService struct {
 	voteRepo        activity_common.VoteRepo
 	userRepo        usercommon.UserRepo
 	reportRepo      report_common.ReportRepo
-	configRepo      config.ConfigRepo
+	configService   *config.ConfigService
 	siteInfoService *siteinfo_common.SiteInfoCommonService
 	serviceConfig   *service_config.ServiceConfig
 
@@ -49,7 +49,7 @@ func NewDashboardService(
 	voteRepo activity_common.VoteRepo,
 	userRepo usercommon.UserRepo,
 	reportRepo report_common.ReportRepo,
-	configRepo config.ConfigRepo,
+	configService *config.ConfigService,
 	siteInfoService *siteinfo_common.SiteInfoCommonService,
 	serviceConfig *service_config.ServiceConfig,
 
@@ -62,7 +62,7 @@ func NewDashboardService(
 		voteRepo:        voteRepo,
 		userRepo:        userRepo,
 		reportRepo:      reportRepo,
-		configRepo:      configRepo,
+		configService:   configService,
 		siteInfoService: siteInfoService,
 		serviceConfig:   serviceConfig,
 
@@ -90,6 +90,7 @@ func (ds *DashboardService) StatisticalByCache(ctx context.Context) (*schema.Das
 	startTime := time.Now().Unix() - schema.AppStartTime.Unix()
 	dashboardInfo.AppStartTime = fmt.Sprintf("%d", startTime)
 	dashboardInfo.VersionInfo.Version = constant.Version
+	dashboardInfo.VersionInfo.Revision = constant.Revision
 	return dashboardInfo, nil
 }
 
@@ -130,12 +131,11 @@ func (ds *DashboardService) Statistical(ctx context.Context) (*schema.DashboardI
 	var activityTypes []int
 
 	for _, typeKey := range typeKeys {
-		var t int
-		t, err = ds.configRepo.GetConfigType(typeKey)
+		cfg, err := ds.configService.GetConfigByKey(ctx, typeKey)
 		if err != nil {
 			continue
 		}
-		activityTypes = append(activityTypes, t)
+		activityTypes = append(activityTypes, cfg.ID)
 	}
 
 	voteCount, err := ds.voteRepo.GetVoteCount(ctx, activityTypes)
@@ -165,7 +165,7 @@ func (ds *DashboardService) Statistical(ctx context.Context) (*schema.DashboardI
 	dashboardInfo.ReportCount = reportCount
 
 	dashboardInfo.UploadingFiles = true
-	emailconfig, err := ds.GetEmailConfig()
+	emailconfig, err := ds.GetEmailConfig(ctx)
 	if err != nil {
 		return dashboardInfo, err
 	}
@@ -194,6 +194,7 @@ func (ds *DashboardService) Statistical(ctx context.Context) (*schema.DashboardI
 	dashboardInfo.AppStartTime = fmt.Sprintf("%d", startTime)
 	dashboardInfo.TimeZone = siteInfoInterface.TimeZone
 	dashboardInfo.VersionInfo.Version = constant.Version
+	dashboardInfo.VersionInfo.Revision = constant.Revision
 	dashboardInfo.VersionInfo.RemoteVersion = ds.RemoteVersion(ctx)
 	return dashboardInfo, nil
 }
@@ -223,8 +224,8 @@ func (ds *DashboardService) RemoteVersion(ctx context.Context) string {
 	return remoteVersion.Release.Version
 }
 
-func (ds *DashboardService) GetEmailConfig() (ec *export.EmailConfig, err error) {
-	emailConf, err := ds.configRepo.GetString("email.config")
+func (ds *DashboardService) GetEmailConfig(ctx context.Context) (ec *export.EmailConfig, err error) {
+	emailConf, err := ds.configService.GetStringValue(ctx, "email.config")
 	if err != nil {
 		return nil, err
 	}

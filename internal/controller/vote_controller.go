@@ -4,6 +4,7 @@ import (
 	"github.com/answerdev/answer/internal/base/handler"
 	"github.com/answerdev/answer/internal/base/middleware"
 	"github.com/answerdev/answer/internal/base/reason"
+	"github.com/answerdev/answer/internal/base/translator"
 	"github.com/answerdev/answer/internal/schema"
 	"github.com/answerdev/answer/internal/service"
 	"github.com/answerdev/answer/internal/service/rank"
@@ -41,13 +42,15 @@ func (vc *VoteController) VoteUp(ctx *gin.Context) {
 	}
 	req.ObjectID = uid.DeShortID(req.ObjectID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	can, _, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, true)
+	can, needRank, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, true)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
 		return
 	}
 	if !can {
-		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		lang := handler.GetLang(ctx)
+		msg := translator.TrWithData(lang, reason.NoEnoughRankToOperate, &schema.PermissionTrTplData{Rank: needRank})
+		handler.HandleResponse(ctx, errors.Forbidden(reason.NoEnoughRankToOperate).WithMsg(msg), nil)
 		return
 	}
 
@@ -78,13 +81,15 @@ func (vc *VoteController) VoteDown(ctx *gin.Context) {
 	}
 	req.ObjectID = uid.DeShortID(req.ObjectID)
 	req.UserID = middleware.GetLoginUserIDFromContext(ctx)
-	can, _, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, false)
+	can, needRank, err := vc.rankService.CheckVotePermission(ctx, req.UserID, req.ObjectID, false)
 	if err != nil {
 		handler.HandleResponse(ctx, err, nil)
 		return
 	}
 	if !can {
-		handler.HandleResponse(ctx, errors.Forbidden(reason.RankFailToMeetTheCondition), nil)
+		lang := handler.GetLang(ctx)
+		msg := translator.TrWithData(lang, reason.NoEnoughRankToOperate, &schema.PermissionTrTplData{Rank: needRank})
+		handler.HandleResponse(ctx, errors.Forbidden(reason.NoEnoughRankToOperate).WithMsg(msg), nil)
 		return
 	}
 

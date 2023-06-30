@@ -18,12 +18,16 @@ const Index = ({
   title = '',
   confirmText = '',
   content,
+  onCancel: onClose,
   onConfirm,
   cancelBtnVariant = 'link',
   confirmBtnVariant = 'primary',
   ...props
 }: Config) => {
   const onCancel = () => {
+    if (typeof onClose === 'function') {
+      onClose();
+    }
     render({ visible: false });
     div.remove();
   };
@@ -45,7 +49,7 @@ const Index = ({
         cancelBtnVariant={cancelBtnVariant}
         confirmBtnVariant={confirmBtnVariant}
         {...props}>
-        <div dangerouslySetInnerHTML={{ __html: content }} />
+        <p dangerouslySetInnerHTML={{ __html: content }} />
       </Modal>,
     );
   }

@@ -4,7 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 
 import { SWRConfig } from 'swr';
 
-import { toastStore, loginToContinueStore, errorCode } from '@/stores';
+import { toastStore, loginToContinueStore, errorCodeStore } from '@/stores';
 import {
   Header,
   Footer,
@@ -12,11 +12,9 @@ import {
   Customize,
   CustomizeTheme,
   PageTags,
+  HttpErrorContent,
 } from '@/components';
 import { LoginToContinueModal } from '@/components/Modal';
-import { useImgViewer } from '@/hooks';
-import Component404 from '@/pages/404';
-import Component50X from '@/pages/50X';
 
 const Layout: FC = () => {
   const location = useLocation();
@@ -24,9 +22,7 @@ const Layout: FC = () => {
   const closeToast = () => {
     toastClear();
   };
-  const { code: httpStatusCode, reset: httpStatusReset } = errorCode();
-
-  const imgViewer = useImgViewer();
+  const { code: httpStatusCode, reset: httpStatusReset } = errorCodeStore();
   const { show: showLoginToContinueModal } = loginToContinueStore();
 
   useEffect(() => {
@@ -42,13 +38,9 @@ const Layout: FC = () => {
         }}>
         <Header />
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
-        <div
-          className="position-relative page-wrap"
-          onClick={imgViewer.checkClickForImgView}>
-          {httpStatusCode === '404' ? (
-            <Component404 />
-          ) : httpStatusCode === '50X' ? (
-            <Component50X />
+        <div className="position-relative page-wrap">
+          {httpStatusCode ? (
+            <HttpErrorContent httpCode={httpStatusCode} />
           ) : (
             <Outlet />
           )}

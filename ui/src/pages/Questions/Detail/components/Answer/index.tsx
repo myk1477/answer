@@ -1,5 +1,5 @@
 import { memo, FC, useEffect, useRef } from 'react';
-import { Button, Alert } from 'react-bootstrap';
+import { Button, Alert, Badge } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ import {
   Comment,
   FormatTime,
   htmlRender,
+  ImgViewer,
 } from '@/components';
 import { scrollToElementTop, bgFadeOut } from '@/utils';
 import { AnswerItem } from '@/common/interface';
@@ -20,8 +21,7 @@ interface Props {
   data: AnswerItem;
   /** router answer id */
   aid?: string;
-  /** is author */
-  isAuthor: boolean;
+  canAccept: boolean;
   questionTitle: string;
   slugTitle: string;
   isLogged: boolean;
@@ -30,11 +30,11 @@ interface Props {
 const Index: FC<Props> = ({
   aid,
   data,
-  isAuthor,
   isLogged,
   questionTitle = '',
   slugTitle,
   callback,
+  canAccept = false,
 }) => {
   const { t } = useTranslation('translation', {
     keyPrefix: 'question_detail',
@@ -77,12 +77,23 @@ const Index: FC<Props> = ({
           {t('post_deleted', { keyPrefix: 'messages' })}
         </Alert>
       )}
-      <article
-        dangerouslySetInnerHTML={{ __html: data?.html }}
-        className="fmt text-break text-wrap"
-      />
+      {data?.accepted === 2 && (
+        <div className="mb-3 lh-1">
+          <Badge bg="success" pill>
+            <Icon name="check-circle-fill me-1" />
+            Best answer
+          </Badge>
+        </div>
+      )}
+      <ImgViewer>
+        <article
+          className="fmt text-break text-wrap"
+          dangerouslySetInnerHTML={{ __html: data?.html }}
+        />
+      </ImgViewer>
       <div className="d-flex align-items-center mt-4">
         <Actions
+          source="answer"
           data={{
             id: data?.id,
             isHate: data?.vote_status === 'vote_down',
@@ -95,24 +106,17 @@ const Index: FC<Props> = ({
           }}
         />
 
-        {data?.accepted === 2 && (
+        {canAccept && (
           <Button
-            disabled={!isAuthor}
-            variant="outline-success"
-            className="ms-3 active opacity-100 bg-success text-white"
-            onClick={acceptAnswer}>
-            <Icon name="check-circle-fill" className="me-2" />
-            <span>{t('answers.btn_accepted')}</span>
-          </Button>
-        )}
-
-        {isAuthor && data.accepted === 1 && (
-          <Button
-            variant="outline-success"
+            variant={data.accepted === 2 ? 'success' : 'outline-success'}
             className="ms-3"
             onClick={acceptAnswer}>
             <Icon name="check-circle-fill" className="me-2" />
-            <span>{t('answers.btn_accept')}</span>
+            <span>
+              {data.accepted === 2
+                ? t('answers.btn_accepted')
+                : t('answers.btn_accept')}
+            </span>
           </Button>
         )}
       </div>
@@ -145,14 +149,14 @@ const Index: FC<Props> = ({
               <FormatTime
                 time={Number(data.update_time)}
                 preFix={t('edit')}
-                className="link-secondary fs-14"
+                className="link-secondary small"
               />
             </Link>
           ) : (
             <FormatTime
               time={Number(data.update_time)}
               preFix={t('edit')}
-              className="text-secondary fs-14"
+              className="text-secondary small"
             />
           )}
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Row, Col, Form, Button, Card } from 'react-bootstrap';
+import { Row, Col, Form, Button, Card } from 'react-bootstrap';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -16,9 +16,9 @@ import {
   questionDetail,
   modifyQuestion,
   useQueryRevisions,
-  postAnswer,
   useQueryQuestionByTitle,
   getTagsBySlugName,
+  saveQuestionWidthAnaser,
 } from '@/services';
 import { handleFormError, SaveDraft, storageExpires } from '@/utils';
 import { pathFactory } from '@/router/pathFactory';
@@ -29,7 +29,7 @@ interface FormDataItem {
   title: Type.FormValue<string>;
   tags: Type.FormValue<Type.Tag[]>;
   content: Type.FormValue<string>;
-  answer: Type.FormValue<string>;
+  answer_content: Type.FormValue<string>;
   edit_summary: Type.FormValue<string>;
 }
 
@@ -52,7 +52,7 @@ const Ask = () => {
       isInvalid: false,
       errorMsg: '',
     },
-    answer: {
+    answer_content: {
       value: '',
       isInvalid: false,
       errorMsg: '',
@@ -92,7 +92,7 @@ const Ask = () => {
       return;
     }
     getTagsBySlugName(queryTags).then((tags) => {
-      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      // eslint-disable-next-line
       handleTagsChange(tags);
     });
   };
@@ -116,8 +116,8 @@ const Ask = () => {
         formData.title.value = draft.title;
         formData.content.value = draft.content;
         formData.tags.value = draft.tags;
-        formData.answer.value = draft.answer;
-        setCheckState(Boolean(draft.answer));
+        formData.answer_content.value = draft.answer_content;
+        setCheckState(Boolean(draft.answer_content));
         setHasDraft(true);
         setFormData({ ...formData });
       } else {
@@ -131,7 +131,7 @@ const Ask = () => {
   }, [qid]);
 
   useEffect(() => {
-    const { title, tags, content, answer } = formData;
+    const { title, tags, content, answer_content } = formData;
     const { title: editTitle, tags: editTags, content: editContent } = immData;
 
     // edited
@@ -151,14 +151,19 @@ const Ask = () => {
       return;
     }
     // write
-    if (title.value || tags.value.length > 0 || content.value || answer.value) {
+    if (
+      title.value ||
+      tags.value.length > 0 ||
+      content.value ||
+      answer_content.value
+    ) {
       // save draft
       saveDraft.save({
         params: {
           title: title.value,
           tags: tags.value,
           content: content.value,
-          answer: answer.value,
+          answer_content: answer_content.value,
         },
         callback: () => setHasDraft(true),
       });
@@ -215,7 +220,7 @@ const Ask = () => {
   const handleAnswerChange = (value: string) =>
     setFormData({
       ...formData,
-      answer: { ...formData.answer, value, errorMsg: '' },
+      answer_content: { ...formData.answer_content, value, errorMsg: '' },
     });
 
   const handleSummaryChange = (evt: React.ChangeEvent<HTMLInputElement>) =>
@@ -263,31 +268,30 @@ const Ask = () => {
           }
         });
     } else {
-      const res = await saveQuestion(params).catch((err) => {
-        if (err.isError) {
-          const data = handleFormError(err, formData);
-          setFormData({ ...data });
-        }
-      });
+      let res;
+      if (checked) {
+        res = await saveQuestionWidthAnaser({
+          ...params,
+          answer_content: formData.answer_content.value,
+        }).catch((err) => {
+          if (err.isError) {
+            const data = handleFormError(err, formData);
+            setFormData({ ...data });
+          }
+        });
+      } else {
+        res = await saveQuestion(params).catch((err) => {
+          if (err.isError) {
+            const data = handleFormError(err, formData);
+            setFormData({ ...data });
+          }
+        });
+      }
 
-      const id = res?.id;
+      const id = res?.id || res?.question?.id;
       if (id) {
         if (checked) {
-          postAnswer({
-            question_id: id,
-            content: formData.answer.value,
-          })
-            .then(() => {
-              navigate(pathFactory.questionLanding(id, params.url_title));
-            })
-            .catch((err) => {
-              if (err.isError) {
-                const data = handleFormError(err, formData, [
-                  { from: 'content', to: 'answer' },
-                ]);
-                setFormData({ ...data });
-              }
-            });
+          navigate(pathFactory.questionLanding(id, res?.question?.url_title));
         } else {
           navigate(pathFactory.questionLanding(id));
         }
@@ -302,7 +306,7 @@ const Ask = () => {
   const handleSelectedRevision = (e) => {
     const index = e.target.value;
     const revision = revisions[index];
-    formData.content.value = revision.content.content;
+    formData.content.value = revision.content?.content || '';
     setImmData({ ...formData });
     setFormData({ ...formData });
   };
@@ -315,14 +319,10 @@ const Ask = () => {
     title: pageTitle,
   });
   return (
-    <Container className="pt-4 mt-2 mb-5">
-      <Row className="justify-content-center">
-        <Col xxl={10} md={12}>
-          <h3 className="mb-4">{isEdit ? t('edit_title') : t('title')}</h3>
-        </Col>
-      </Row>
-      <Row className="justify-content-center">
-        <Col xxl={7} lg={8} sm={12} className="mb-4 mb-md-0">
+    <div className="pt-4 mb-5">
+      <h3 className="mb-4">{isEdit ? t('edit_title') : t('title')}</h3>
+      <Row>
+        <Col className="page-main flex-auto">
           <Form noValidate onSubmit={handleSubmit}>
             {isEdit && (
               <Form.Group controlId="revision" className="mb-3">
@@ -448,7 +448,7 @@ const Ask = () => {
                   <Form.Group controlId="answer" className="mt-4">
                     <Form.Label>{t('form.fields.answer.label')}</Form.Label>
                     <Editor
-                      value={formData.answer.value}
+                      value={formData.answer_content.value}
                       onChange={handleAnswerChange}
                       ref={editorRef2}
                       className={classNames(
@@ -464,11 +464,11 @@ const Ask = () => {
                     />
                     <Form.Control
                       type="text"
-                      isInvalid={formData.answer.isInvalid}
+                      isInvalid={formData.answer_content.isInvalid}
                       hidden
                     />
                     <Form.Control.Feedback type="invalid">
-                      {formData.answer.errorMsg}
+                      {formData.answer_content.errorMsg}
                     </Form.Control.Feedback>
                   </Form.Group>
                 )}
@@ -486,7 +486,7 @@ const Ask = () => {
             )}
           </Form>
         </Col>
-        <Col xxl={3} lg={4} sm={12} className="mt-5 mt-lg-0">
+        <Col className="page-right-side mt-4 mt-xl-0">
           <Card>
             <Card.Header>
               {t('title', { keyPrefix: 'how_to_format' })}
@@ -500,7 +500,7 @@ const Ask = () => {
           </Card>
         </Col>
       </Row>
-    </Container>
+    </div>
   );
 };
 
